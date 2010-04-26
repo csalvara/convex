@@ -1,0 +1,32 @@
+<html>
+
+<head>
+<title>Convex Hull Readme</title>
+</head>
+
+<body>
+<table border=5 width=1000 align="center"><tr><td>
+
+<h1 align="center">Convex Hull Readme</h1>
+<h3 align="center">flash application by <a href="mailto:chris@cmu.edu">Christopher Salvarani</a></h3>
+
+<h2>What does the program do?</h2>
+The program finds the convex hull of a set of points inputted by the user using either Graham scan or Chan’s algorithm. It walks through the algorithm showing each step.
+
+<h2>How do I run the program?</h2>
+You run the program by opening the convex.html file. It will load the HTML page which embeds the flash program.
+
+<h2>What is the input?</h2>
+The input is a set of points. The user clicks various spots on the screen to input the points, and then when ready clicks the appropriate buttons on the bottom bar.
+
+<h2>How does Chan's algorithm work?</h2>
+<p>Chan’s algorithm works by guessing h (the number of points on the convex hull) to be m (initial guess of 2 is acceptable), and then dividing the set of points into O(n/m) subsets of O(m) points and computing the convex hull of each of these with an O(nlogn) algorithm (like Graham scan). This takes O(nlogm).</p>
+<p>It then uses a variation of Jarvis march (a naïve O(nh) convex hull algorithm) in conjunction with the already computed convex hulls to construct the convex hull. Jarvis march is sped up to O(nlogm) using the pre-computed mini-hulls, which we can search using a variation of binary search. If the value for m guessed was too low (we figure this out when we take m steps and have not returned to the starting vertex), we bail out and try a greater value for m (the square of m) without exceeding n.</p>
+<p>Chan’s algorithm has an overall running time of O(nlogh).</p>
+
+<h1 align="center"><a href='javascript:history.go(-1)>Back</a></h1>
+
+</td></tr></table>
+</body>
+
+</html>
