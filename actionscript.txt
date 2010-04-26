@@ -7,8 +7,7 @@ var DURATION = 0.5;
 
 // full screen
 fullscreen_btn.addEventListener(MouseEvent.CLICK, fullscreenF);
-function fullscreenF(event:MouseEvent)
-{
+function fullscreenF(event:MouseEvent) {
     if (stage.displayState == StageDisplayState.NORMAL) {
         stage.displayState=StageDisplayState.FULL_SCREEN;
     } else {
@@ -19,7 +18,6 @@ function fullscreenF(event:MouseEvent)
 // point and line arrays
 var points:Array = new Array();
 var lines:Array = new Array();
-var line_masks:Array = new Array();
 
 // point functions
 function comparePoints(p1:Point, p2:Point):int {
@@ -36,7 +34,6 @@ function comparePoints(p1:Point, p2:Point):int {
 	else
 		return 1;
 }
-
 function CCW(p1:Point, p2:Point, p3:Point):int {
 	var det = p1.x*(p2.y-p3.y)-p2.x*(p1.y-p3.y)+p3.x*(p1.y-p2.y);
 
@@ -54,7 +51,7 @@ function sqDist(p1:Point, p2:Point):int {
 }
 
 // line functions
-function addLine(p1:Point, p2:Point) {
+function makeLine(p1:Point, p2:Point, color:uint, style:int):MovieClip {
 	// draw line mask
 	var line_mask:Mask = new Mask();
 	line_mask.x = p1.x;
@@ -71,27 +68,61 @@ function addLine(p1:Point, p2:Point) {
 
 	// draw line
 	var line:MovieClip = new MovieClip();
-	line.graphics.lineStyle(1);
+	line.graphics.lineStyle(style);
 	line.graphics.moveTo(p1.x, p1.y);
 	line.graphics.lineTo(p2.x, p2.y);
 	line.mask = line_mask;
 
+	// set line color
+	var c:ColorTransform = new ColorTransform();
+	c.color = color;
+	line.transform.colorTransform = c;
+
+	return line;
+}
+function animateLine(line:MovieClip):Tween {
 	// show line and line mask
 	addChild(line);
-	addChild(line_mask);
+	addChild(line.mask);
+	addChild(click_area_btn);
 
-	// add line and mask to array
+	// add line into array
 	lines.push(line);
-	line_masks.push(line_mask);
-}
 
-function removeLines() {
+	// animate in
+	var width_max = Math.sqrt(line.width * line.width + line.height * line.height);
+	return new Tween(Mask(line.mask).rect_mc, "width", Strong.easeOut, 0, width_max, DURATION, true);
+}
+function retractLine(line:MovieClip):Tween {
+	var line:MovieClip;
+	if ((line = lines.pop()) != null) {
+		var tween:Tween = new Tween(Mask(line.mask).rect_mc, "width", Strong.easeOut, Mask(line.mask).rect_mc.width, 0, DURATION, true);
+		tween.addEventListener(TweenEvent.MOTION_FINISH, removeLineE);
+		function removeLineE(e:TweenEvent) {
+			removeChild(line.mask);
+			removeChild(line);
+			var e:TweenEvent;
+			e.currentTarget.removeEventListener(TweenEvent.MOTION_FINISH, removeLineE);
+		}
+		return tween;
+	}
+	else
+		return null;
+}
+function removeLines(ignore = null) {
 	var line:MovieClip;
 	while ((line = lines.pop()) != null) {
+		removeChild(line.mask);
 		removeChild(line);
-		removeChild(line_masks.pop());
 	}
-	find_mc.enabled = true;
+}
+
+// message functions
+function printMessage(msg:String) {
+	message_txt.text = msg;
+}
+function appendMessage(msg:String) {
+	message_txt.appendText(msg);
 }
 
 /**************************************************************/
@@ -107,12 +138,12 @@ function clickE(e:MouseEvent) {
 	var y_coor:int = e.stageY;
 
 	// clear message
-	message_txt.text = "";
+	printMessage("");
 
 	// ignore if point already in set
 	for (var i = 0; i < points.length; i++) {
 		if (points[i].x == x_coor && points[i].y == y_coor) {
-			message_txt.text = "Point already in set.";
+			printMessage("Point already in set.");
 			return;
 		}
 	}
@@ -123,6 +154,7 @@ function clickE(e:MouseEvent) {
 	point.y = y_coor;
 	points.push(point);
 	addChild(point);
+	addChild(click_area_btn);
 }
 
 clear_mc.addEventListener(MouseEvent.CLICK, clearE);
@@ -135,57 +167,35 @@ function clearE(e:MouseEvent) {
 	var point:Point;
 	while ((point = points.pop()) != null)
 		removeChild(point);
-	message_txt.text = "Points cleared.";
+	printMessage("Points cleared.");
 }
 
-find_mc.addEventListener(MouseEvent.CLICK, findE);
-function findE(e:MouseEvent) {
+gs_mc.addEventListener(MouseEvent.CLICK, gsE);
+function gsE(e:MouseEvent) {
 	// remove lines and actions
 	removeLines();
 	removeActions();
 
-	// do nothing if already constructed
-	if (lines.length != 0)
-		return;
-
-	message_txt.text = "Building convex hull...";
-
-	// output lines
-	var output:Array = Chan(points);
-	if (output.length > 1) {
-		for (var i = 1; i < output.length; i++)
-			addLine(output[i-1], output[i]);
-		addLine(output[output.length-1], output[0]);
-	}
-
-	// add show line actions
-	function showLine(i) {
-		var line_mask:Mask = line_masks[i];
-		var width_max = Math.sqrt(lines[i].width * lines[i].width + lines[i].height * lines[i].height);
-		return new Tween(line_mask.rect_mc, "width", Strong.easeOut, 0, width_max, DURATION, true);
-	}
-	for (i = 0; i < lines.length; i++)
-		addAction(showLine, i, TweenEvent.MOTION_FINISH);
-
-	// add finish message action
-	function done(arg) {
-		message_txt.text = "Convex hull constructed.";
-	}
-	addAction(done, null, null);
+	// run algorithm
+	GrahamScan(points, true);
 }
 
-function GrahamScan(points:Array):Array {
-	// special cases: 0, 1, or 2 points
+chan_mc.addEventListener(MouseEvent.CLICK, chanE);
+function chanE(e:MouseEvent) {
+	// remove lines and actions
+	removeLines();
+	removeActions();
+
+	// run algorithm
+	Chan(points, true);
+}
+
+function GrahamScan(points:Array, show_ch:Boolean = false):Array {
+	// special cases: 0 or 1 point
 	if (points.length == 0)
 		return [];
 	if (points.length == 1)
 		return [points[0]];
-	if (points.length == 2) {
-		if (comparePoints(points[0],points[1]) < 0)
-			return [points[0], points[1]];
-		else
-			return [points[1], points[0]];
-	}
 
 	// find index of leftmost point
 	var left_idx = 0;
@@ -201,6 +211,16 @@ function GrahamScan(points:Array):Array {
 		if (i != left_idx)
 			sorted.push(points[i]);
 	}
+	var gr_p:Point = points[!left_idx+0];
+	for (i = !left_idx+1; i < points.length; i++) {
+		if (i != left_idx) {
+			var curr_p:Point = points[i];
+			var gr_cmp = (gr_p.y - left.y) * (curr_p.x - left.x);
+			var curr_cmp = (curr_p.y - left.y) * (gr_p.x - left.x);
+			if (curr_cmp > gr_cmp)
+				gr_p = curr_p;
+		}
+	}
 	function comp(p1:Point,p2:Point):int {
 		var cmp1 = (p1.y - left.y) * (p2.x - left.x);
 		var cmp2 = (p2.y - left.y) * (p1.x - left.x);
@@ -208,8 +228,22 @@ function GrahamScan(points:Array):Array {
 			return -1;
 		else if (cmp1 > cmp2)
 			return 1;
-		else
-			return 0;
+		else {	// collinear case
+			gr_cmp = (gr_p.y - left.y) * (p1.x - left.x);
+			curr_cmp = (p1.y - left.y) * (gr_p.x - left.x);
+			if (gr_cmp == curr_cmp) {
+				if (sqDist(p1,left) < sqDist(p2,left))
+					return 1;
+				else
+					return -1;
+			}
+			else {
+				if (sqDist(p1,left) < sqDist(p2,left))
+					return -1;
+				else
+					return 1;
+			}
+		}
 	}
 	sorted.sort(comp);
 
@@ -217,28 +251,37 @@ function GrahamScan(points:Array):Array {
 	var input:Array = sorted.reverse();
 
 	// run graham scan
+	if (show_ch)
+		addAction(printMessage, "Constructing convex hull...", null);
 	var output:Array = new Array();
 	output.push(left);
 	output.push(input.pop());
+	if (show_ch)
+		addAction(animateLine, makeLine(output[0],output[1],0x000000,1), TweenEvent.MOTION_FINISH);
 	while (input.length > 0) {
 		var point:Point = input.pop();
 		var ccw;
-		while ((ccw = CCW(output[output.length-2],output[output.length-1],point)) < 0)
+		while ((ccw = CCW(output[output.length-2],output[output.length-1],point)) < 0) {
 			output.pop();
-		// fix for collinearity
-		if (ccw == 0 && sqDist(output[output.length-2],output[output.length-1]) > sqDist(output[output.length-2],point)) {
-			var temp:Point = output.pop();
-			output.push(point);
-			point = temp;
+			if (show_ch)
+				addAction(retractLine, lines[lines.length-1], TweenEvent.MOTION_FINISH);
 		}
 		output.push(point);
+		if (show_ch)
+			addAction(animateLine, makeLine(output[output.length-2],output[output.length-1],0x000000,1), TweenEvent.MOTION_FINISH);
 	}
 
-	/* return point array as output */
+	// finish convex hull
+	if (show_ch) {
+		addAction(animateLine, makeLine(output[output.length-1],output[0],0x000000,1), TweenEvent.MOTION_FINISH);
+		addAction(printMessage, "Convex hull constructed.", null);
+	}
+
+	// return point array as output
 	return output;
 }
 
-function Chan(points:Array):Array {
+function Chan(points:Array, show_ch:Boolean = false):Array {
 	// special cases: 0 or 1 points
 	var n = points.length;
 	if (n == 0)
@@ -247,7 +290,16 @@ function Chan(points:Array):Array {
 		return [points[0]];
 
 	// square the guess of h each iteration
+	var prev_m:int = -1;
 	for (var m = 2; m != null; m = m == n ? null : Math.min(m*m,n)) {
+		if (show_ch) {
+			if (prev_m == -1)
+				addAction(printMessage, "Initial guess: h ≤" + m + "...", null);
+			else {
+				addAction(removeLines, null, null);
+				addAction(printMessage, "h > " + prev_m + "... New guess: h ≤ " + m + "...", null);
+			}
+		}
 		// partition points
 		var parts:Array = new Array(Math.ceil(n/m));
 		var curr_part = 0;
@@ -267,8 +319,18 @@ function Chan(points:Array):Array {
 		}
 		// run graham scan on each partition
 		var ch:Array = new Array(parts.length);
-		for (curr_part = 0; curr_part < parts.length; curr_part++)
-			ch[curr_part] = GrahamScan(parts[curr_part]);
+		for (curr_part = 0; curr_part < parts.length; curr_part++) {
+			var ch_arr:Array = ch[curr_part] = GrahamScan(parts[curr_part]);
+			if (show_ch) {
+				if (ch_arr.length > 1) {
+					var color = Math.random() * 0xFFFFFF;
+					for (i = 1; i < ch_arr.length; i++)
+						addAction(animateLine, makeLine(ch_arr[i-1],ch_arr[i],color,1), TweenEvent.MOTION_FINISH);
+					if (ch_arr.length > 2)
+						addAction(animateLine, makeLine(ch_arr[ch_arr.length-1],ch_arr[0],color,1), TweenEvent.MOTION_FINISH);
+				}
+			}
+		}
 		// find leftmost point
 		var ch_idx = 0;
 		idx = 0;
@@ -279,6 +341,8 @@ function Chan(points:Array):Array {
 		var output:Array = new Array();
 		output.push(ch[ch_idx][0]);
 		// run jarvis march, stop if we realize m < h
+		if (show_ch)
+			addAction(appendMessage, " Running Jarvis march...", null);
 		for (i = 1; i <= m; i++) {
 			// find rightmost point
 			var ch_right = null;
@@ -291,79 +355,88 @@ function Chan(points:Array):Array {
 					curr_right_idx = (idx + 1) % ch[ch_idx].length;
 				}
 				else
-					curr_right_idx = rightmost(ch[ch_idx][idx], ch[curr_ch]);
-				if (ch_right == null || right(ch[ch_idx][idx], ch[curr_ch][curr_right_idx], ch[ch_right][right_idx]) > 0) {
+					curr_right_idx = rightmost(output.length < 2 ? null : output[output.length-2], output[output.length-1], ch[curr_ch]);
+				if (ch_right == null || right(output.length < 2 ? null : output[output.length-2], output[output.length-1], ch[curr_ch][curr_right_idx], ch[ch_right][right_idx]) > 0) {
 					ch_right = curr_ch;
 					right_idx = curr_right_idx;
 				}
 			}
 			// if found starting point, done
-			if (ch[ch_right][right_idx] == output[0])
+			if (ch[ch_right][right_idx] == output[0]) {
+				if (show_ch) {
+					addAction (animateLine, makeLine(output[output.length-1],output[0],0xFF0000,3), TweenEvent.MOTION_FINISH);
+					addAction(printMessage, "Convex hull constructed.", null);
+				}
 				return output;
+			}
 			// add to convex hull
 			output.push(ch[ch_right][right_idx]);
+			if (show_ch)
+				addAction (animateLine, makeLine(output[output.length-2],output[output.length-1],0xFF0000,3), TweenEvent.MOTION_FINISH);
 			ch_idx = ch_right;
 			idx = right_idx;
 		}
+		prev_m = m;
 	}
-	// if all guesses failed, just use graham scan
-	return GrahamScan(points);
+	throw new Error("Failed to find convex hull.");
 }
 
-// TODO: fix case where points are collinear
-function right(p:Point, p1:Point, p2:Point):int {
+function right(prev_p:Point, p:Point, p1:Point, p2:Point):int {
 	var ccw = CCW(p2, p, p1);
 	if (ccw == 0) {
-		trace("COLLINEAR " + p.x + "," + p.y + " " + p1.x + "," + p1.y + " " + p2.x + "," + p2.y);
-		try {
-			throw new Error('StackTrace');
-		} catch (e:Error) {
-			trace(e.getStackTrace());
+		// if entirely collinear and either is on wrong side, return other
+		if (prev_p != null && CCW(prev_p,p,p1) == 0) {
+			var prev_dist = sqDist(prev_p, p1);
+			var curr_dist = sqDist(p, p1);
+			if (curr_dist > prev_dist)
+				return -1;
+			prev_dist = sqDist(prev_p, p2);
+			curr_dist = sqDist(p, p2);
+			if (curr_dist > prev_dist)
+				return 1;
 		}
-
+		// pick closer point
 		var dist1 = sqDist(p, p1);
 		var dist2 = sqDist(p, p2);
 		if (dist1 < dist2)
 			return 1;
-		else if (dist1 > dist2)
-			return -1;
 		else
-			return 0;
+			return -1;
 	}
 	else
 		return ccw;
 }
-function rightmost(p:Point, points:Array) {
+function rightmost(prev_p:Point, p:Point, points:Array) {
 	var low = 0;
 	var high = points.length - 1;
 	while (low != high) {
 		// special case: 2 points left
 		if (low+1 == high) {
-			if (right(p,points[low],points[high]) > 0)
+			if (right(prev_p,p,points[low],points[high]) > 0)
 				return low;
 			else
 				return high;
 		}
 		// split in middle, eliminate half
 		var mid = Math.ceil((low + high) / 2);
-		if (right(p,points[mid],points[low]) > 0) {
-			if (right(p,points[mid-1],points[mid]) > 0) {
+		if (right(prev_p,p,points[mid],points[low]) > 0) {
+			if (right(prev_p,p,points[mid-1],points[mid]) > 0) {
 				low = low + 1;
 				high = mid - 1;
 				continue;
 			}
-			if (right(p,points[mid+1],points[mid]) > 0) {
+			if (right(prev_p,p,points[mid+1],points[mid]) > 0) {
 				low = mid + 1;
 				continue;
 			}
 			return mid;
 		}
 		else {
-			if (right(p,points[high],points[low]) > 0) {
+			if (right(prev_p,p,points[high],points[low]) > 0) {
 				low = mid + 1;
 				continue;
 			}
-			if (right(p,points[low+1],points[low]) > 0) {
+			if (right(prev_p,p,points[low+1],points[low]) > 0) {
 				low = low + 1;
 				high = mid - 1;
 				continue;
