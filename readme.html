@@ -4,8 +4,8 @@
 <title>Convex Hull Readme</title>
 </head>
 
-<body>
-<table border=5 width=1000 align="center"><tr><td>
+<body bgcolor="#D1E7F4">
+<table border=5 width=1000 align="center" bgcolor="#B5CFE0"><tr><td>
 
 <h1 align="center">Convex Hull Readme</h1>
 <h3 align="center">flash application by <a href="mailto:chris@cmu.edu">Christopher Salvarani</a></h3>
@@ -33,7 +33,7 @@ For m = 2; ; m = MIN(n,m²)<br>
 	Repeat m times<br>
 	<table><tr><td><pre>&#9;</pre></td><td>
 		For each CH<sub>i</sub>, find the point in CH<sub>i</sub> which is rightmost from output<sub>0</sub>, call it r<sub>i</sub><br>
-		Find the point in {r<sub>0</sub>,r</sub>1</sub>,...,r<sub>q</sub>} which is rightmost from output<sub>0</sub>, call it right<br>
+		Find the point in {r<sub>0</sub>,r<sub>1</sub>,...,r<sub>q</sub>} which is rightmost from output<sub>0</sub>, call it right<br>
 		if left = right, return output<br>
 		output.push(right)
 	</td></tr></table>
@@ -43,22 +43,23 @@ For m = 2; ; m = MIN(n,m²)<br>
 <p>It then uses a variation of Jarvis march (a naïve O(nh) convex hull algorithm) in conjunction with the already computed convex hulls to construct the convex hull. Jarvis march is sped up to O(nlogm) using the pre-computed mini-hulls, which we can search using a variation of binary search. If the value for m guessed was too low (we figure this out when we take m steps and have not returned to the starting vertex), we bail out and try a greater value for m (the square of m) without exceeding n.</p>
 
 <h2>What is the running time of Chan's algorithm?</h2>
-<p><table><tr>
-</td>
+<p><table>
+<tr><td>
 	Each iteration of Chan's algorithm has a running time of O(nlogm)
-</td>
-<td><ul>
+</td></tr>
+<tr><td>
+<ul>
 	<li>Partitioning P takes O(n).
 	<li>Finding the convex hull of a single partition takes O(mlogm), and we do it O(n/m) times. So, this takes O(nlogm).
 	<li>Finding the leftmost point in P takes O(n).
 	<li>Finding the rightmost points in each partition takes O(n/m*logm) (O(logm) for each using binary search on the convex hull). Finding the rightmost of these takes O(n/m), so O(n/m*logm) dominates. We repeat this m times, so this takes O(nlogm).
-</ul></td>
-</tr></table></p>
-<p>Summing over each iteration gives us:<br>
+</ul>
+</td></tr>
+</table>
+Summing over each iteration gives us:<br>
 <table><tr><td><pre>&#9;</pre></td><td>
-<img src="summation.png">
+<img src="summation.png" width="75%" height="75%" alt="Summation">
 </td></tr></table>
-</p>
 <p>So, Chan’s algorithm has an overall running time of O(nlogh).</p>
 
 <h1 align="center"><a href="javascript:history.go(-1)">Back</a></h1>
