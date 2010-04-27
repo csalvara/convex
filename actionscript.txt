@@ -125,7 +125,9 @@ function appendMessage(msg:String) {
 	message_txt.appendText(msg);
 }
 
-/**************************************************************/
+/**************************************************************
+ * click event listeners                                      *
+ **************************************************************/
 
 click_area_btn.addEventListener(MouseEvent.CLICK, clickE);
 function clickE(e:MouseEvent) {
@@ -189,6 +191,10 @@ function chanE(e:MouseEvent) {
 	// run algorithm
 	Chan(points, true);
 }
+
+/**************************************************************
+ * convex hull functions                                      *
+ **************************************************************/
 
 function GrahamScan(points:Array, show_ch:Boolean = false):Array {
 	// special cases: 0 or 1 point
@@ -447,6 +453,10 @@ function rightmost(prev_p:Point, p:Point, points:Array) {
 	// left with only 1 point, the rightmost
 	return low;
 }
+
+/**************************************************************
+ * action queue functions                                     *
+ **************************************************************/
 
 var curr_action;
 var curr_event;
