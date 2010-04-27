@@ -23,10 +23,9 @@ The input is a set of points. The user clicks various spots on the screen to inp
 Here is the pseudocode for Chan's algorithm:<br>
 <div style="font-family:courier new">
 <b>Input</b>: P∈ℝ² : |P|=n>0<br>
-m=2<br>
-Loop<br>
+For m = 2; ; m = MIN(n,m²)<br>
 <table><tr><td><pre>&#9;</pre></td><td>
-	Parition P into P<sub>0</sub>,P<sub>1</sub>,...,P<sub>q</sub> where |P<sub>i</sub>|=m for all i&lt;q and |P<sub>q</sub>|>0<br>
+	Partition P into P<sub>0</sub>,P<sub>1</sub>,...,P<sub>q</sub> where |P<sub>i</sub>|=m for all i&lt;q and |P<sub>q</sub>|>0<br>
 	Run an O(nlogn) convex hull algorithm on each P<sub>i</sub>. Let CH<sub>i</sub> be the convex hull of P<sub>i</sub><br>
 	Find leftmost point in P, call it left<br>
 	Initialize output to empty stack (we refer to the top of the stack as output<sub>0</sub>)<br>
@@ -38,13 +37,12 @@ Loop<br>
 		if left = right, return output<br>
 		output.push(right)
 	</td></tr></table>
-	m = MIN(n,m²)<br>
 </td></tr></table>
 </div>
 <p>Chan’s algorithm works by guessing h (the number of points on the convex hull) to be m (initial guess of 2 is acceptable), and then dividing the set of points into O(n/m) subsets of O(m) points and computing the convex hull of each of these with an O(nlogn) algorithm (like Graham scan). This takes O(nlogm).</p>
 <p>It then uses a variation of Jarvis march (a naïve O(nh) convex hull algorithm) in conjunction with the already computed convex hulls to construct the convex hull. Jarvis march is sped up to O(nlogm) using the pre-computed mini-hulls, which we can search using a variation of binary search. If the value for m guessed was too low (we figure this out when we take m steps and have not returned to the starting vertex), we bail out and try a greater value for m (the square of m) without exceeding n.</p>
 
-<h2>What is the runing time of Chan's algorithm?</h2>
+<h2>What is the running time of Chan's algorithm?</h2>
 <p><table><tr>
 </td>
 	Each iteration of Chan's algorithm has a running time of O(nlogm)
