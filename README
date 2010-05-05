@@ -3,7 +3,7 @@ flash application by Christopher Salvarani (chris@cmu.edu)
 
 What does the program do?
 -------------------------
-The program finds the convex hull of a set of points inputted by the user using either Graham scan or Chan’s algorithm. It walks through the algorithm showing each step.
+The program finds the convex hull of a set of points inputted by the user. It walks through the algorithm showing each step.
 
 How do I run the program?
 -------------------------
