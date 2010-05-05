@@ -1,9 +1,16 @@
 import fl.transitions.Tween;
 import fl.transitions.easing.Strong;
 import fl.transitions.TweenEvent;
+import flash.geom.Point;
+import flash.utils.Timer;
+import flash.display.MovieClip;
+import fl.motion.easing.Linear;
 
 // duration in seconds of line animation
-var DURATION = 0.5;
+var LINE_DURATION = 0.5;
+
+// duration in seconds after showing point label
+var LABEL_DURATION = 0.25;
 
 // full screen
 fullscreen_btn.addEventListener(MouseEvent.CLICK, fullscreenF);
@@ -21,18 +28,15 @@ var lines:Array = new Array();
 
 // point functions
 function comparePoints(p1:Point, p2:Point):int {
+	if (p1.x > p2.x)
+		return 1;
 	if (p1.x < p2.x)
 		return -1;
-	else if (p1.x == p2.x) {
-		if (p1.y < p2.y)
-			return -1;
-		else if (p1.y == p2.y)
-			return 0;
-		else
-			return 1;
-	}
-	else
+	if (p1.y > p2.y)
 		return 1;
+	if (p1.y < p2.y)
+		return -1;
+	return 0;
 }
 function CCW(p1:Point, p2:Point, p3:Point):int {
 	var det = p1.x*(p2.y-p3.y)-p2.x*(p1.y-p3.y)+p3.x*(p1.y-p2.y);
@@ -48,6 +52,21 @@ function sqDist(p1:Point, p2:Point):int {
 	var x_dist = p2.x - p1.x;
 	var y_dist = p2.y - p1.y;
 	return x_dist * x_dist + y_dist * y_dist;
+}
+function compLineDist(lp1:Point, lp2:Point, p1:Point, p2:Point):int {
+	var A = lp1.y - lp2.y;
+	var B = lp2.x - lp1.x;
+	var C = lp1.y * (lp1.x-lp2.x) + lp1.x * (lp2.y-lp1.y);
+
+	// numerators of point-line distance
+	var num1 = Math.abs(A * p1.x + B * p1.y + C);
+	var num2 = Math.abs(A * p2.x + B * p2.y + C);
+
+	if (num1 > num2)
+		return 1;
+	if (num1 < num2)
+		return -1;
+	return 0;
 }
 
 // line functions
@@ -80,6 +99,19 @@ function makeLine(p1:Point, p2:Point, color:uint, style:int):MovieClip {
 
 	return line;
 }
+function showLine(line:MovieClip) {
+	// show line and line mask
+	addChild(line);
+	addChild(line.mask);
+	addChild(click_area_btn);
+
+	// add line into array
+	lines.push(line);
+
+	// show immediately
+	var width_max = Math.sqrt(line.width * line.width + line.height * line.height);
+	Mask(line.mask).rect_mc.width = width_max;
+}
 function animateLine(line:MovieClip):Tween {
 	// show line and line mask
 	addChild(line);
@@ -91,12 +123,12 @@ function animateLine(line:MovieClip):Tween {
 
 	// animate in
 	var width_max = Math.sqrt(line.width * line.width + line.height * line.height);
-	return new Tween(Mask(line.mask).rect_mc, "width", Strong.easeOut, 0, width_max, DURATION, true);
+	return new Tween(Mask(line.mask).rect_mc, "width", Strong.easeOut, 0, width_max, LINE_DURATION, true);
 }
 function retractLine(line:MovieClip):Tween {
 	var line:MovieClip;
 	if ((line = lines.pop()) != null) {
-		var tween:Tween = new Tween(Mask(line.mask).rect_mc, "width", Strong.easeOut, Mask(line.mask).rect_mc.width, 0, DURATION, true);
+		var tween:Tween = new Tween(Mask(line.mask).rect_mc, "width", Strong.easeOut, Mask(line.mask).rect_mc.width, 0, LINE_DURATION, true);
 		tween.addEventListener(TweenEvent.MOTION_FINISH, removeLineE);
 		function removeLineE(e:TweenEvent) {
 			removeChild(line.mask);
@@ -109,11 +141,32 @@ function retractLine(line:MovieClip):Tween {
 	else
 		return null;
 }
-function removeLines(ignore = null) {
-	var line:MovieClip;
-	while ((line = lines.pop()) != null) {
-		removeChild(line.mask);
-		removeChild(line);
+function removeLines(rm_lines:Array = null) {
+	if (rm_lines == null) {
+		var line:MovieClip;
+		while ((line = lines.pop()) != null) {
+			removeChild(line.mask);
+			removeChild(line);
+		}
+	}
+	else {
+		var new_lines:Array = new Array();
+		for (var i = 0; i < lines.length; i++) {
+			var remove:Boolean = false;
+			for (var j = 0; j < rm_lines.length; j++) {
+				if (rm_lines[j] == lines[i]) {
+					remove = true;
+					break;
+				}
+			}
+			if (remove) {
+				removeChild(lines[i].mask);
+				removeChild(lines[i]);
+			}
+			else
+				new_lines.push(lines[i]);
+		}
+		lines = new_lines;
 	}
 }
 
@@ -122,7 +175,21 @@ function printMessage(msg:String) {
 	message_txt.text = msg;
 }
 function appendMessage(msg:String) {
-	message_txt.appendText(msg);
+	message_txt.text += msg;
+}
+
+// label functions
+function addLabel(arr:Array):Timer {
+	var p:Point = arr[0];
+	var lbl:String = arr[1];
+	p.label_txt.text = lbl;
+	var timer:Timer = new Timer(LABEL_DURATION*1000, 1);
+	timer.start();
+	return timer;
+}
+function removeLabels(ignore = null) {
+	for (var i = 0; i < points.length; i++)
+		points[i].label_txt.text = "";
 }
 
 /**************************************************************
@@ -131,9 +198,10 @@ function appendMessage(msg:String) {
 
 click_area_btn.addEventListener(MouseEvent.CLICK, clickE);
 function clickE(e:MouseEvent) {
-	// remove lines and actions
+	// remove lines, actions, and labels
 	removeLines();
 	removeActions();
+	removeLabels();
 
 	// get coordinates
 	var x_coor:int = e.stageX;
@@ -172,28 +240,35 @@ function clearE(e:MouseEvent) {
 	printMessage("Points cleared.");
 }
 
-gs_mc.addEventListener(MouseEvent.CLICK, gsE);
-function gsE(e:MouseEvent) {
-	// remove lines and actions
+ch_mc.addEventListener(MouseEvent.CLICK, chE);
+function chE(e:MouseEvent) {
+	// remove lines, actions, and labels
 	removeLines();
 	removeActions();
+	removeLabels();
 
 	// run algorithm
-	GrahamScan(points, true);
-}
-
-chan_mc.addEventListener(MouseEvent.CLICK, chanE);
-function chanE(e:MouseEvent) {
-	// remove lines and actions
-	removeLines();
-	removeActions();
-
-	// run algorithm
-	Chan(points, true);
+	switch(alg_mc.selectedItem.data) {
+		case "gs":
+			GrahamScan(points, true);
+			break;
+		case "jm":
+			JarvisMarch(points, true);
+			break;
+		case "chan":
+			Chan(points, true);
+			break;
+		case "qh":
+			QuickHull(points, true);
+			break;
+		case "dc":
+			DivideAndConquer(points, true);
+			break;
+	}
 }
 
 /**************************************************************
- * convex hull functions                                      *
+ * convex hull algorithms                                     *
  **************************************************************/
 
 function GrahamScan(points:Array, show_ch:Boolean = false):Array {
@@ -206,7 +281,7 @@ function GrahamScan(points:Array, show_ch:Boolean = false):Array {
 	// find index of leftmost point
 	var left_idx = 0;
 	for (var i = 1; i < points.length; i++) {
-		if (comparePoints(points[left_idx], points[i]) > 0)
+		if (comparePoints(points[i], points[left_idx]) < 0)
 			left_idx = i;
 	}
 
@@ -252,6 +327,11 @@ function GrahamScan(points:Array, show_ch:Boolean = false):Array {
 		}
 	}
 	sorted.sort(comp);
+	if (show_ch) {
+		addAction(printMessage, "Sorting points by angle...", null);
+		for (i = 0; i < sorted.length; i++)
+			addAction(addLabel, [sorted[i], i+1], TimerEvent.TIMER);
+	}
 
 	// pushed sorted list of vertices onto input stack
 	var input:Array = sorted.reverse();
@@ -287,6 +367,48 @@ function GrahamScan(points:Array, show_ch:Boolean = false):Array {
 	return output;
 }
 
+function JarvisMarch(points:Array, show_ch:Boolean = false):Array {
+	// special cases: 0 or 1 points
+	if (points.length == 0)
+		return [];
+	if (points.length == 1)
+		return [points[0]];
+
+	if (show_ch)
+		addAction(printMessage, "Constructing convex hull...", null);
+
+	// find index of leftmost point
+	var point:Point = points[0];
+	for (var i = 1; i < points.length; i++) {
+		if (comparePoints(points[i], point) < 0)
+			point = points[i];
+	}
+	var output:Array = [point];
+
+	while (true) {
+		// find rightmost
+		point = null;
+		for (i = 0; i < points.length; i++) {
+			if (points[i] == output[output.length-1])
+				continue;
+			if (point == null) {
+				point = points[i];
+				continue;
+			}
+			if (right(output.length < 2 ? null : output[output.length-2], output[output.length-1], points[i], point) > 0)
+				point = points[i];
+		}
+		if (show_ch)
+			addAction(animateLine, makeLine(output[output.length-1],point,0x000000,1), TweenEvent.MOTION_FINISH);
+		if (point == output[0])
+			break;
+		output.push(point);
+	}
+	if (show_ch)
+		addAction(printMessage, "Convex hull constructed.", null);
+	return output;
+}
+
 function Chan(points:Array, show_ch:Boolean = false):Array {
 	// special cases: 0 or 1 points
 	var n = points.length;
@@ -300,7 +422,7 @@ function Chan(points:Array, show_ch:Boolean = false):Array {
 	for (var m = 2; m != null; m = m == n ? null : Math.min(m*m,n)) {
 		if (show_ch) {
 			if (prev_m == -1)
-				addAction(printMessage, "Initial guess: h ≤" + m + "...", null);
+				addAction(printMessage, "Initial guess: h ≤ " + m + "...", null);
 			else {
 				addAction(removeLines, null, null);
 				addAction(printMessage, "h > " + prev_m + "... New guess: h ≤ " + m + "...", null);
@@ -341,7 +463,7 @@ function Chan(points:Array, show_ch:Boolean = false):Array {
 		var ch_idx = 0;
 		idx = 0;
 		for (i = 1; i < ch.length; i++) {
-			if (comparePoints(ch[ch_idx][0], ch[i][0]) > 0)
+			if (comparePoints(ch[i][0], ch[ch_idx][0]) < 0)
 				ch_idx = i;
 		}
 		var output:Array = new Array();
@@ -362,23 +484,25 @@ function Chan(points:Array, show_ch:Boolean = false):Array {
 				}
 				else
 					curr_right_idx = rightmost(output.length < 2 ? null : output[output.length-2], output[output.length-1], ch[curr_ch]);
+				if (show_ch)
+					addAction(addLabel, [ch[curr_ch][curr_right_idx], "R"], TimerEvent.TIMER);
 				if (ch_right == null || right(output.length < 2 ? null : output[output.length-2], output[output.length-1], ch[curr_ch][curr_right_idx], ch[ch_right][right_idx]) > 0) {
 					ch_right = curr_ch;
 					right_idx = curr_right_idx;
 				}
 			}
+			if (show_ch) {
+				addAction(animateLine, makeLine(output[output.length-1],ch[ch_right][right_idx],0xFF0000,3), TweenEvent.MOTION_FINISH);
+				addAction(removeLabels, null, null);
+			}
 			// if found starting point, done
 			if (ch[ch_right][right_idx] == output[0]) {
-				if (show_ch) {
-					addAction (animateLine, makeLine(output[output.length-1],output[0],0xFF0000,3), TweenEvent.MOTION_FINISH);
+				if (show_ch)
 					addAction(printMessage, "Convex hull constructed.", null);
-				}
 				return output;
 			}
 			// add to convex hull
 			output.push(ch[ch_right][right_idx]);
-			if (show_ch)
-				addAction (animateLine, makeLine(output[output.length-2],output[output.length-1],0xFF0000,3), TweenEvent.MOTION_FINISH);
 			ch_idx = ch_right;
 			idx = right_idx;
 		}
@@ -386,6 +510,282 @@ function Chan(points:Array, show_ch:Boolean = false):Array {
 	}
 	throw new Error("Failed to find convex hull.");
 }
+
+function QuickHull(points:Array, show_ch:Boolean = false):Array {
+	// special cases: 0 or 1 points
+	var n = points.length;
+	if (n == 0)
+		return [];
+	if (n == 1)
+		return [points[0]];
+
+	if (show_ch)
+		addAction(printMessage, "Constructing convex hull...", null);
+
+	// find left, right, top, and bottom points
+	var left:Point = points[0];
+	var right:Point = points[0];
+	var top:Point = points[0];
+	var bottom:Point = points[0];
+	for (var i = 1; i < points.length; i++) {
+		if (points[i].x < left.x)
+			left = points[i];
+		if (points[i].x > right.x)
+			right = points[i];
+		if (points[i].y < bottom.y)
+			bottom = points[i];
+		if (points[i].y > top.y)
+			top = points[i];
+	}
+
+	// draw lines
+	var lb_line:MovieClip = null;
+	var rb_line:MovieClip = null;
+	var rt_line:MovieClip = null;
+	var lt_line:MovieClip = null;
+	if (show_ch) {
+		lb_line = makeLine(left,bottom,0x000000,1);
+		addAction(animateLine,lb_line,TweenEvent.MOTION_FINISH);
+		rb_line = makeLine(bottom,right,0x000000,1);
+		addAction(animateLine,rb_line,TweenEvent.MOTION_FINISH);
+		rt_line = makeLine(right,top,0x000000,1);
+		addAction(animateLine,rt_line,TweenEvent.MOTION_FINISH);
+		lt_line = makeLine(top,left,0x000000,1);
+		addAction(animateLine,lt_line,TweenEvent.MOTION_FINISH);
+	}
+
+	// split points into 4 sets (4 outer triangles), discard interior
+	var left_bottom:Array = new Array();
+	var right_bottom:Array = new Array();
+	var right_top:Array = new Array();
+	var left_top:Array = new Array();
+	for (i = 0; i < points.length; i++) {
+		if (points[i] != left && points[i] != top && CCW(left,top,points[i]) >= 0)
+			left_top.push(points[i]);
+		else if (points[i] != top && points[i] != right && CCW(top,right,points[i]) >= 0)
+			right_top.push(points[i]);
+		else if (points[i] != right && points[i] != bottom && CCW(right,bottom,points[i]) >= 0)
+			right_bottom.push(points[i]);
+		else if (points[i] != bottom && points[i] != left && CCW(bottom,left,points[i]) >= 0)
+			left_bottom.push(points[i]);
+	}
+
+	// recursively solve each triangle and concatenate
+	var output:Array = [left].concat(qh_helper(left,bottom,lb_line,left_bottom)).concat([bottom])
+		.concat(qh_helper(right,bottom,rb_line,right_bottom)).concat([right])
+		.concat(qh_helper(right,top,rt_line,right_top)).concat([top])
+		.concat(qh_helper(left,top,lt_line,left_top));
+
+	// recursively computes convex hull of points compared to a line
+	function qh_helper(lp1:Point, lp2:Point, line:MovieClip, pts:Array):Array {
+		// base case
+		if (pts.length == 0)
+			return [];
+		// find farthest point from line
+		var fp:Point = pts[0];
+		for (var i = 1; i < pts.length; i++) {
+			if (compLineDist(lp1,lp2,pts[i],fp) > 0)
+				fp = pts[i];
+		}
+		// draw new lines
+		var l1:MovieClip = null;
+		var l2:MovieClip = null;
+		if (show_ch) {
+			l1 = makeLine(lp1,fp,0x000000,1);
+			addAction(animateLine,l1,TweenEvent.MOTION_FINISH);
+			l2 = makeLine(fp,lp2,0x000000,1);
+			addAction(animateLine,l2,TweenEvent.MOTION_FINISH);
+			addAction(removeLines,[line],null);
+		}
+		// space case: all points are on line
+		if (CCW(lp1,lp2,fp) == 0) {
+			function comp(p1:Point, p2:Point):int {
+				if (sqDist(lp1,p1) > sqDist(lp1,p2))
+					return 1;
+				return 0;
+			}
+			return pts.sort(comp);
+		}
+		// find points on side 1
+		var ccw = CCW(lp1,fp,lp2);
+		var s1:Array = new Array();
+		for (i = 0; i < pts.length; i++) {
+			if (pts[i] != fp && CCW(lp1,fp,pts[i]) != ccw)
+				s1.push(pts[i]);
+		}
+		// find points on side 2
+		ccw = CCW(lp2,fp,lp1);
+		var s2:Array = new Array();
+		for (i = 0; i < pts.length; i++) {
+			if (pts[i] != fp && CCW(lp2,fp,pts[i]) != ccw)
+				s2.push(pts[i]);
+		}
+		return qh_helper(lp1,fp,l1,s1).concat([fp]).concat(qh_helper(lp2,fp,l2,s2));
+	}
+
+	if (show_ch)
+		addAction(printMessage, "Convex hull constructed.", null);
+	return output;
+}
+
+function DivideAndConquer(points:Array, show_ch:Boolean = false):Array {
+	// special cases: 0 or 1 points
+	var n = points.length;
+	if (n == 0)
+		return [];
+	if (n == 1)
+		return [points[0]];
+
+	if (show_ch)
+		addAction(printMessage, "Constructing convex hull...", null);
+
+	// sort from left to right
+	var sorted:Array = new Array();
+	for (var i = 0; i < points.length; i++)
+		sorted.push(points[i]);
+	sorted.sort(comparePoints);
+
+	// recursive helper function
+	function dc_helper(low:int, high:int):Array {
+		// base case
+		if (low == high)
+			return [[sorted[low]],show_ch ? [] : null];
+		// split in middle and solve each half
+		var mid:int = Math.floor((low + high)/2);
+		var left_arr:Array = dc_helper(low,mid);
+		var left:Array = left_arr[0];
+		var left_lines:Array = left_arr[1];
+		var right_arr:Array = dc_helper(mid+1,high);
+		var right:Array = right_arr[0];
+		var right_lines:Array = right_arr[1];
+		// comparator functions
+		function compLT(p1:Point, p2:Point):int {
+			if (p1.x > p2.x)
+				return 1;
+			if (p1.x < p2.x)
+				return -1;
+			if (p1.y > p2.y)
+				return 1;
+				return -1;
+		}
+		function compLB(p1:Point, p2:Point):int {
+			if (p1.x > p2.x)
+				return 1;
+			if (p1.x < p2.x)
+				return -1;
+			if (p1.y < p2.y)
+				return 1;
+			return -1;
+		}
+		function compRT(p1:Point, p2:Point):int {
+			if (p1.x < p2.x)
+				return 1;
+			if (p1.x > p2.x)
+				return -1;
+			if (p1.y > p2.y)
+				return 1;
+			return -1;
+		}
+		function compRB(p1:Point, p2:Point):int {
+			if (p1.x < p2.x)
+				return 1;
+			if (p1.x > p2.x)
+				return -1;
+			if (p1.y < p2.y)
+				return 1;
+			return -1;
+		}
+		function getMax(arr:Array, comp:Function):int {
+			var max:int = 0;
+			for (var i = 1; i < arr.length; i++) {
+				if (comp(arr[i],arr[max]) > 0)
+					max = i;
+			}
+			return max;
+		}
+		var output:Array = new Array();
+		// find top and bottom tangents
+		var left_top:int = getMax(left, compLT);
+		var left_bottom:int = getMax(left, compLB);
+		var right_top:int = getMax(right, compRT);
+		var right_bottom:int = getMax(right, compRB);
+		var left_updated:Boolean = false;
+		var right_updated:Boolean = false;
+		do {
+			var updated:Boolean = false;
+			for (i = (left_top+1)%left.length; CCW(right[right_top],left[left_top],left[i]) < 0; i = (i+1)%left.length) {
+				left_top = i;
+				left_updated = updated = true;
+			}
+			for (i = (right_top+right.length-1)%right.length; CCW(left[left_top],right[right_top],right[i]) > 0; i = (i+right.length-1)%right.length) {
+				right_top = i;
+				right_updated = updated = true;
+			}
+		} while (updated);
+		do {
+			updated = false;
+			for (i = (left_bottom+left.length-1)%left.length; CCW(right[right_bottom],left[left_bottom],left[i]) > 0; i = (i+left.length-1)%left.length) {
+				left_bottom = i;
+				left_updated = updated = true;
+			}
+			for (i = (right_bottom+1)%right.length; CCW(left[left_bottom],right[right_bottom],right[i]) < 0; i = (i+1)%right.length) {
+				right_bottom = i;
+				right_updated = updated = true;
+			}
+		} while (updated);
+		if (show_ch) {
+			var top_line:MovieClip = makeLine(left[left_top],right[right_top],0x000000,3);
+			var bottom_line:MovieClip = makeLine(left[left_bottom],right[right_bottom],0x000000,3);
+			addAction(animateLine, top_line, TweenEvent.MOTION_FINISH);
+			addAction(animateLine, bottom_line, TweenEvent.MOTION_FINISH);
+		}
+		// walk around left side
+		output.push(left[left_top]);
+		if (!(left_updated && left_top == left_bottom)) {
+			for (var i = (left_top+1)%left.length; i != left_bottom; i = (i+1)%left.length)
+				output.push(left[i]);
+			if (left_top != left_bottom)
+				output.push(left[left_bottom]);
+		}
+		// walk around right side
+		output.push(right[right_bottom]);
+		if (!(right_updated && right_top == right_bottom)) {
+			for (i = (right_bottom+1)%right.length; i != right_top; i = (i+1)%right.length)
+				output.push(right[i]);
+			if (right_top != right_bottom)
+				output.push(right[right_top]);
+		}
+		var lines:Array = null;
+		if (show_ch) {
+			addAction(removeLines, left_lines, null);
+			addAction(removeLines, right_lines, null);
+			addAction(removeLines, [top_line], null);
+			addAction(removeLines, [bottom_line], null);
+			lines = new Array();
+			if (output.length > 1) {
+				for (i = 1; i < output.length; i++) {
+					var line:MovieClip = makeLine(output[i-1],output[i],0x000000,1);
+					lines.push(line);
+					addAction(showLine, line, null);
+				}
+				if (output.length > 2) {
+					line = makeLine(output[output.length-1],output[0],0x000000,1);
+					lines.push(line);
+					addAction(showLine, line, null);
+				}
+			}
+		}
+		return [output,lines];
+	}
+	var ch_res:Array = dc_helper(0,sorted.length-1);
+	if (show_ch)
+		addAction(printMessage, "Convex hull constructed.", null);
+	return ch_res[0];
+}
+
+/**************************************************************
+ * convex hull helpers                                        *
+ **************************************************************/
 
 function right(prev_p:Point, p:Point, p1:Point, p2:Point):int {
 	var ccw = CCW(p2, p, p1);
