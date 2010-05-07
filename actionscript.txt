@@ -571,10 +571,15 @@ function QuickHull(points:Array, show_ch:Boolean = false):Array {
 	}
 
 	// recursively solve each triangle and concatenate
-	var output:Array = [left].concat(qh_helper(left,bottom,lb_line,left_bottom)).concat([bottom])
-		.concat(qh_helper(right,bottom,rb_line,right_bottom)).concat([right])
-		.concat(qh_helper(right,top,rt_line,right_top)).concat([top])
-		.concat(qh_helper(left,top,lt_line,left_top));
+	var output:Array = [left];
+	if (left != bottom)
+		output = output.concat(qh_helper(left,bottom,lb_line,left_bottom)).concat([bottom]);
+	if (bottom != right)
+		output = output.concat(qh_helper(right,bottom,rb_line,right_bottom)).concat([right]);
+	if (right != top)
+		output.concat(qh_helper(right,top,rt_line,right_top)).concat([top]);
+	if (top != left)
+		output.concat(qh_helper(left,top,lt_line,left_top));
 
 	// recursively computes convex hull of points compared to a line
 	function qh_helper(lp1:Point, lp2:Point, line:MovieClip, pts:Array):Array {
